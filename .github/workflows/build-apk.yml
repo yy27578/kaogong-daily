@@ -23,11 +23,13 @@ jobs:
         with:
           node-version: '20'
       
-      - name: Create Capacitor config (远程加载模式)
+      - name: Install Capacitor
         run: |
           npm init -y
-          npm install @capacitor/core @capacitor/android @capacitor/cli
-          # 创建capacitor配置，让APP启动时加载远程URL
+          npm install @capacitor/core@5 @capacitor/android@5 @capacitor/cli@5
+      
+      - name: Create Capacitor config
+        run: |
           cat > capacitor.config.json << 'EOF'
 {
   "appId": "com.kaogong.daily",
@@ -36,22 +38,33 @@ jobs:
   "server": {
     "url": "https://yy27578.github.io/kaogong-daily/",
     "allowNavigation": ["yy27578.github.io"]
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1000,
+      "backgroundColor": "#1A56DB"
+    }
   }
 }
 EOF
       
-      - name: Build APK
+      - name: Initialize and sync
         run: |
-          npx cap init --web-dir . 2>/dev/null || true
-          npx cap add android
+          npx cap init com.kaogong.daily "考公晨读" --web-dir=. 2>/dev/null || npx cap init com.kaogong.daily "考公晨读"
+          npx cap add android 2>/dev/null || true
           npx cap sync android
+      
+      - name: Accept licenses and build
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
+          yes | $ANDROID_HOME/tools/bin/sdkmanager --licenses > /dev/null 2>&1 || true
           cd android
-          export ANDROID_HOME=/usr/local/lib/android/sdk
-          echo "y" | $ANDROID_HOME/tools/bin/sdkmanager --licenses > /dev/null 2>&1 || true
-          ./gradlew assembleDebug
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
       
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: kaogong-daily-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: warn
