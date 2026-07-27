@@ -3,8 +3,6 @@ name: Build APK
 on:
   push:
     branches: [main]
-  schedule:
-    - cron: '30 22 * * *'
 
 jobs:
   build:
@@ -23,42 +21,163 @@ jobs:
         with:
           node-version: '20'
       
-      - name: Install Capacitor
+      - name: Create Android WebView App
         run: |
-          npm init -y
-          npm install @capacitor/core@5 @capacitor/android@5 @capacitor/cli@5
-      
-      - name: Create Capacitor config
-        run: |
-          cat > capacitor.config.json << 'EOF'
-{
-  "appId": "com.kaogong.daily",
-  "appName": "考公晨读",
-  "webDir": ".",
-  "server": {
-    "url": "https://yy27578.github.io/kaogong-daily/",
-    "allowNavigation": ["yy27578.github.io"]
-  },
-  "plugins": {
-    "SplashScreen": {
-      "launchShowDuration": 1000,
-      "backgroundColor": "#1A56DB"
+          # 创建Android项目
+          mkdir -p android-app/app/src/main/java/com/kaogong/daily
+          mkdir -p android-app/app/src/main/res/values
+          mkdir -p android-app/app/src/main/assets
+          mkdir -p android-app/gradle/wrapper
+          
+          # 复制网页文件到assets
+          cp index.html android-app/app/src/main/assets/
+          
+          # 创建AndroidManifest.xml
+          cat > android-app/app/src/main/AndroidManifest.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.kaogong.daily">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <application
+        android:allowBackup="true"
+        android:label="考公晨读"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="考公晨读">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+EOF
+          
+          # 创建MainActivity - 加载远程URL
+          cat > android-app/app/src/main/java/com/kaogong/daily/MainActivity.java << 'EOF'
+package com.kaogong.daily;
+
+import android.os.Bundle;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import androidx.appcompat.app.AppCompatActivity;
+
+public class MainActivity extends AppCompatActivity {
+    private WebView webView;
+    
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        webView = new WebView(this);
+        setContentView(webView);
+        
+        webView.getSettings().setJavaScriptEnabled(true);
+        webView.getSettings().setDomStorageEnabled(true);
+        webView.getSettings().setLoadWithOverviewMode(true);
+        webView.getSettings().setUseWideViewPort(true);
+        webView.setWebViewClient(new WebViewClient());
+        
+        webView.loadUrl("https://yy27578.github.io/kaogong-daily/");
     }
-  }
+    
+    @Override
+    public void onBackPressed() {
+        if (webView.canGoBack()) {
+            webView.goBack();
+        } else {
+            super.onBackPressed();
+        }
+    }
 }
 EOF
+          
+          # 创建资源文件
+          cat > android-app/app/src/main/res/values/styles.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="colorPrimary">#1A56DB</item>
+        <item name="colorPrimaryDark">#0F3A8C</item>
+        <item name="colorAccent">#E67E22</item>
+    </style>
+</resources>
+EOF
+          
+          # 创建build.gradle (app)
+          cat > android-app/app/build.gradle << 'EOF'
+apply plugin: 'com.android.application'
+
+android {
+    compileSdkVersion 34
+    defaultConfig {
+        applicationId "com.kaogong.daily"
+        minSdkVersion 21
+        targetSdkVersion 34
+        versionCode 1
+        versionName "1.0"
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+}
+EOF
+          
+          # 创建build.gradle (project)
+          cat > android-app/build.gradle << 'EOF'
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.1.0'
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+EOF
+          
+          # 创建settings.gradle
+          cat > android-app/settings.gradle << 'EOF'
+include ':app'
+rootProject.name = "KaogongDaily"
+EOF
+          
+          # 创建gradle.properties
+          cat > android-app/gradle.properties << 'EOF'
+org.gradle.jvmargs=-Xmx2048m
+android.useAndroidX=true
+EOF
+          
+          # Gradle wrapper
+          cat > android-app/gradle/wrapper/gradle-wrapper.properties << 'EOF'
+distributionBase=GRADLE_USER_HOME
+distributionPath=wrapper/dists
+distributionUrl=https\://services.gradle.org/distributions/gradle-8.0-bin.zip
+zipStoreBase=GRADLE_USER_HOME
+zipStorePath=wrapper/dists
+EOF
       
-      - name: Initialize and sync
+      - name: Build APK
         run: |
-          npx cap init com.kaogong.daily "考公晨读" --web-dir=. 2>/dev/null || npx cap init com.kaogong.daily "考公晨读"
-          npx cap add android 2>/dev/null || true
-          npx cap sync android
-      
-      - name: Accept licenses and build
-        run: |
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
-          yes | $ANDROID_HOME/tools/bin/sdkmanager --licenses > /dev/null 2>&1 || true
-          cd android
+          cd android-app
+          # 下载gradle wrapper jar
+          curl -sL "https://raw.githubusercontent.com/gradle/gradle/v8.0.0/gradlew" -o gradlew
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
       
@@ -66,5 +185,5 @@ EOF
         uses: actions/upload-artifact@v4
         with:
           name: kaogong-daily-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: android-app/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: warn
