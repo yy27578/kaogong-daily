@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: '30 22 * * *'  # 每天6:30北京时间更新后自动打包
+    - cron: '30 22 * * *'
 
 jobs:
   build:
@@ -23,17 +23,31 @@ jobs:
         with:
           node-version: '20'
       
-      - name: Install Capacitor
+      - name: Create Capacitor config (远程加载模式)
         run: |
           npm init -y
           npm install @capacitor/core @capacitor/android @capacitor/cli
+          # 创建capacitor配置，让APP启动时加载远程URL
+          cat > capacitor.config.json << 'EOF'
+{
+  "appId": "com.kaogong.daily",
+  "appName": "考公晨读",
+  "webDir": ".",
+  "server": {
+    "url": "https://yy27578.github.io/kaogong-daily/",
+    "allowNavigation": ["yy27578.github.io"]
+  }
+}
+EOF
       
       - name: Build APK
         run: |
-          npx cap init "考公晨读" com.kaogong.daily --webDir=.
+          npx cap init --web-dir . 2>/dev/null || true
           npx cap add android
           npx cap sync android
           cd android
+          export ANDROID_HOME=/usr/local/lib/android/sdk
+          echo "y" | $ANDROID_HOME/tools/bin/sdkmanager --licenses > /dev/null 2>&1 || true
           ./gradlew assembleDebug
       
       - name: Upload APK
