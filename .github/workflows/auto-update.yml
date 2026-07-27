@@ -21,16 +21,13 @@ jobs:
 
       - name: 生成晨读内容
         env:
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DEEPSEEK_API_KEY: *** secrets.DEEPSEEK_API_KEY }}
         run: python3 auto_update.py
 
       - name: 推送到仓库
-        env:
-          TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name "晨读机器人"
           git config user.email "bot@kaogong-daily"
           git add data.js index.v2.html index.html build.py
           git commit -m "auto: 晨读更新 $(TZ=Asia/Shanghai date '+%Y-%m-%d')" || echo "无变更"
-          git remote set-url origin https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}
           git push
