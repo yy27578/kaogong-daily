@@ -23,10 +23,12 @@ jobs:
           chmod +x daily_update.sh
           bash daily_update.sh
       
-      - name: 推送到GitHub Pages
+      -       - name: 推送到仓库
         run: |
           git config user.name "晨读机器人"
-          git config user.email "bot@kaogong.daily"
+          git config user.email "bot@kaogong-daily"
           git add data.js index.v2.html index.html build.py
-          git commit -m "auto: 每日晨读更新 $(date '+%Y-%m-%d')" || echo "无变更"
+          git commit -m "auto: 晨读更新 $(TZ=Asia/Shanghai date '+%Y-%m-%d')" || echo "无变更"
+          git remote set-url origin https://github.com/\${{ github.repository }}
+          git config --global http.https://github.com/.extraheader "AUTHORIZATION: basic $(echo -n x-access-token:\${{ secrets.GITHUB_TOKEN }} | base64)"
           git push
